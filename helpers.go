@@ -16,11 +16,24 @@ func isFactoryFunc(t reflect.Type) bool {
 	if t.Kind() != reflect.Func {
 		return false
 	}
-	if t.NumIn() != 1 || !t.In(0).Implements(emptyInterfaceType) {
+	switch t.NumIn() {
+	case 0:
+	case 1:
+		if t.In(0).Implements(emptyInterfaceType) {
+			return false
+		}
+	default:
 		return false
 	}
-
-	if t.NumOut() < 2 || !t.Out(1).Implements(errorInterface) {
+	switch t.NumOut() {
+	case 1:
+	case 2:
+		if !t.Out(1).Implements(errorInterface) {
+			return false
+		}
+	case 0:
+		return false
+	default:
 		return false
 	}
 	return true

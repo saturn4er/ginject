@@ -69,7 +69,7 @@ func (g *Graph) Populate() error {
 					}
 					result, err := f.Call(m.module)
 					if err != nil {
-						return errors.Wrapf(err, "factory %v returns error", f.factoryValue)
+						return errors.Wrapf(err, "factory %v returns error", f.factoryType)
 					}
 					foundType, foundValue, found = f.factoryType, result, true
 				}
@@ -83,7 +83,9 @@ func (g *Graph) Populate() error {
 		}
 		if i, ok := m.module.(OnInjecter); ok {
 			err := i.OnInjected()
-			return errors.Wrapf(err, "failed to handle on OnInjected hook of module %T", m.module)
+			if err != nil {
+				return errors.Wrapf(err, "failed to handle on OnInjected hook of module %T", m.module)
+			}
 		}
 	}
 	return nil

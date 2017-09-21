@@ -1,8 +1,8 @@
 package inject
 
 import (
-	"reflect"
 	"errors"
+	"reflect"
 )
 
 type factory struct {
@@ -13,11 +13,17 @@ type factory struct {
 }
 
 func (f *factory) Call(module interface{}) (reflect.Value, error) {
-	out := f.factoryValue.Call([]reflect.Value{reflect.ValueOf(module)})
+	var in []reflect.Value
+	if f.factoryType.NumIn() > 0 {
+		in = []reflect.Value{reflect.ValueOf(module)}
+	}
+	out := f.factoryValue.Call(in)
 	var err error
-	errI := out[1].Interface()
-	if errI != nil {
-		err = errI.(error)
+	if f.factoryType.NumOut() > 1 {
+		errI := out[1].Interface()
+		if errI != nil {
+			err = errI.(error)
+		}
 	}
 	return out[0], err
 }
@@ -25,7 +31,7 @@ func (f *factory) Call(module interface{}) (reflect.Value, error) {
 func NewFactory(i interface{}) (*factory, error) {
 	ft := reflect.TypeOf(i)
 	if !isFactoryFunc(ft) {
-		return nil, errors.New("bad factory type. Should be of func(interface{})(T, error)")
+		return nil, errors.New("bad factory type. Should be one of: (func() T), (func() T, error) (func(interface{}) T), (func(interface{})(T, error))")
 	}
 	result := &factory{
 		factory:       i,
