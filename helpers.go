@@ -19,7 +19,7 @@ func isFactoryFunc(t reflect.Type) bool {
 	switch t.NumIn() {
 	case 0:
 	case 1:
-		if t.In(0).Implements(emptyInterfaceType) {
+		if !t.In(0).Implements(emptyInterfaceType) {
 			return false
 		}
 	default:
