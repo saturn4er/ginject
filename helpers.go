@@ -1,4 +1,4 @@
-package inject
+package ginject
 
 import (
 	"reflect"
@@ -19,7 +19,7 @@ func isFactoryFunc(t reflect.Type) bool {
 	switch t.NumIn() {
 	case 0:
 	case 1:
-		if !t.In(0).Implements(emptyInterfaceType) {
+		if t.In(0) != emptyInterfaceType {
 			return false
 		}
 	default:
@@ -31,8 +31,6 @@ func isFactoryFunc(t reflect.Type) bool {
 		if !t.Out(1).Implements(errorInterface) {
 			return false
 		}
-	case 0:
-		return false
 	default:
 		return false
 	}

@@ -1,4 +1,4 @@
-package inject
+package ginject
 
 import (
 	"reflect"
@@ -7,17 +7,21 @@ import (
 )
 
 type module struct {
-	name           string
-	module         interface{}
-	ptrType        reflect.Type
-	ptrValue       reflect.Value
-	moduleType     reflect.Type
-	moduleValue    reflect.Value
-	fieldsToInject []*fieldToInject
+	name     string
+	module   interface{}
+	ptrType  reflect.Type
+	ptrValue reflect.Value
+	t        reflect.Type
+	val      reflect.Value
+	fields   []*moduleField
 }
 
-func (m *module) IsNamed() bool {
-	return m.name != ""
+type moduleField struct {
+	module   *module
+	injected bool
+	field    reflect.StructField
+	value    reflect.Value
+	name     string
 }
 
 func NewModule(name string, m interface{}) (*module, error) {
@@ -31,26 +35,24 @@ func NewModule(name string, m interface{}) (*module, error) {
 	}
 
 	result := &module{
-		module:      m,
-		name:        name,
-		ptrType:     ptrType,
-		ptrValue:    ptrValue,
-		moduleValue: ptrValue.Elem(),
-		moduleType:  ptrType.Elem(),
+		module:   m,
+		name:     name,
+		ptrType:  ptrType,
+		ptrValue: ptrValue,
+		val:      ptrValue.Elem(),
+		t:        ptrType.Elem(),
 	}
-	for i := 0; i < result.moduleType.NumField(); i++ {
-		fieldVal := result.moduleValue.Field(i)
-		field := result.moduleType.Field(i)
-		tag, ok := field.Tag.Lookup("inject")
-		if !ok {
-			continue
+	for i := 0; i < result.t.NumField(); i++ {
+		fieldVal := result.val.Field(i)
+		field := result.t.Field(i)
+		if tag, ok := field.Tag.Lookup("inject"); ok {
+			result.fields = append(result.fields, &moduleField{
+				module: result,
+				field:  field,
+				value:  fieldVal,
+				name:   tag,
+			})
 		}
-		result.fieldsToInject = append(result.fieldsToInject, &fieldToInject{
-			field: field,
-			value: fieldVal,
-			name:  tag,
-		})
-
 	}
 	return result, nil
 }

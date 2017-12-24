@@ -1,4 +1,4 @@
-package inject
+package ginject
 
 import (
 	"errors"
@@ -19,11 +19,8 @@ func (f *factory) Call(module interface{}) (reflect.Value, error) {
 	}
 	out := f.factoryValue.Call(in)
 	var err error
-	if f.factoryType.NumOut() > 1 {
-		errI := out[1].Interface()
-		if errI != nil {
-			err = errI.(error)
-		}
+	if f.factoryType.NumOut() > 1 && !out[1].IsNil(){
+		err = out[1].Interface().(error)
 	}
 	return out[0], err
 }

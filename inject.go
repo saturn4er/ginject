@@ -1,9 +1,9 @@
-package inject
+package ginject
 
 import (
-	"reflect"
 	"fmt"
 	"github.com/pkg/errors"
+	"reflect"
 )
 
 type OnInjecter interface {
@@ -16,8 +16,9 @@ type Graph struct {
 }
 
 func (g *Graph) ShouldAddModules(modules ...interface{}) {
-	for _, m := range modules {
-		g.ShouldAddModule(m)
+	err := g.AddModules(modules...)
+	if err != nil {
+		panic(err)
 	}
 }
 func (g *Graph) AddModules(modules ...interface{}) error {
@@ -60,63 +61,110 @@ func (g *Graph) AddFactory(i interface{}) error {
 	g.factories = append(g.factories, f)
 	return nil
 }
+func (g *Graph) ShouldPopulate() {
+	err := g.Populate()
+	if err != nil {
+		panic(err)
+	}
+}
 func (g *Graph) Populate() error {
 	for _, m := range g.modules {
 		if g.Debug {
-			fmt.Println("Populating module", m.moduleType.Name())
+			fmt.Printf("Populating module %T:\n", m.module)
 		}
-		for _, field := range m.fieldsToInject {
-			if field.injected {
-				continue
-			}
-			var foundType reflect.Type
-			var foundValue reflect.Value
-			var found bool
-			for _, m1 := range g.modules {
-				if m1 == m {
-					continue
-				}
-				if m1.ptrType.AssignableTo(field.field.Type) {
-					if found {
-						return errors.Errorf("found multiple injections for module %T field %s: %v, %v", m.module, field.field.Name, foundType, m1)
-					}
-					foundType, foundValue, found = m1.ptrType, m1.ptrValue, true
-				}
-			}
-			for _, f := range g.factories {
-				if f.returnValType.AssignableTo(field.field.Type) {
-					if found {
-						return errors.Errorf("found multiple injections for module %T field %s: %v, %v", m.module, field.field.Name, foundType, f.factoryType)
-					}
-					result, err := f.Call(m.module)
-					if err != nil {
-						return errors.Wrapf(err, "factory %v returns error", f.factoryType)
-					}
-					foundType, foundValue, found = f.factoryType, result, true
-				}
-
-			}
-			if !found {
-				return errors.Errorf("failed to find injection for module %T field %s", m.module, field.field.Name)
-			}
-			field.injected = true
-			field.value.Set(foundValue)
+		for _, field := range m.fields {
 			if g.Debug {
-				fmt.Println("Assigned", foundType.Name(), " to ", m.moduleType.Name(), "field", field.field.Name)
+				fmt.Printf("\tPopulating field %s: \n", field.field.Name)
+			}
+			err := g.populateField(field)
+			if err != nil {
+				return err
 			}
 		}
 		if i, ok := m.module.(OnInjecter); ok {
 			if g.Debug {
-				fmt.Println("Handle OnInjected method of ", m.moduleType.Name())
+				fmt.Printf("\tHandling OnInjected method of %v: ", m.t.Name())
 			}
 			err := i.OnInjected()
-			if g.Debug {
-				fmt.Println("Handled OnInjected method of ", m.moduleType.Name())
-			}
 			if err != nil {
+				if g.Debug {
+					fmt.Println(err)
+				}
 				return errors.Wrapf(err, "failed to handle on OnInjected hook of module %T", m.module)
+			} else if g.Debug {
+				fmt.Println("✓")
+			}
+		} else if g.Debug {
+			if g.Debug {
+				fmt.Println("\tOnInjected method wasn't found")
 			}
 		}
 	}
 	return nil
+}
+func (g *Graph) populateField(field *moduleField) (err error) {
+	var found bool
+	if g.Debug {
+		fmt.Println("\t\tLooking for assignable module")
+	}
+	var val reflect.Value
+	for _, m1 := range g.modules {
+		if m1 == field.module {
+			if g.Debug {
+				fmt.Printf("\t\t\tSkipping %T: can't inject to same module\n", m1.module)
+			}
+			continue
+		}
+		if m1.ptrType.AssignableTo(field.field.Type) {
+			if g.Debug {
+				fmt.Printf("\t\t\tFound %T\n", m1.module)
+			}
+			if found {
+				if g.Debug {
+					fmt.Println("\t\t\tMultiple assignments found :(")
+				}
+				return errors.Errorf("found multiple injections: %#v, %#v", val, m1.val)
+			}
+			val, found = m1.ptrValue, true
+		} else if g.Debug {
+			fmt.Printf("\t\t\tSkipping %T: %v is not assignable to %v\n", m1.module, m1.ptrType, field.field.Type)
+		}
+
+	}
+	if g.Debug {
+		fmt.Println("\t\tLooking for assignable factory value")
+	}
+	for _, f := range g.factories {
+		if f.returnValType.AssignableTo(field.field.Type) {
+			if g.Debug {
+				fmt.Printf("\t\t\tFound value %v of function %T result\n", f.returnValType.String(), f.factory)
+			}
+			if found {
+				if g.Debug {
+					fmt.Println("\t\t\tMultiple assignments found :(")
+				}
+				return errors.Errorf("found multiple injections: %#v, %#v", val, f.factoryValue)
+			}
+			v, err := f.Call(field.module.module)
+			if err != nil {
+				if g.Debug {
+					fmt.Printf("\t\t\tFailed to execute factory function: %v :(\n", err)
+				}
+				return errors.Wrapf(err, "factory %v returns error: %v", f.factoryType, err)
+			}
+			val, found = v, true
+		}
+	}
+	if !found {
+		if g.Debug {
+			fmt.Println("\t\tInjection not found :(")
+		}
+		return errors.New("failed to find injection")
+	}
+	field.injected = true
+	field.value.Set(val)
+	if g.Debug {
+		fmt.Printf("\t\tInjected %v\n", val.Type().String())
+	}
+	return
 }
