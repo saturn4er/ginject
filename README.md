@@ -94,3 +94,18 @@ Valid values of factories is:
 - func() (T, error)
 - func(m interface{}) T
 - func(m interface{}) )T, error)
+
+
+### Named modules
+You also can add named modules to graph
+```go
+    graph.AddNamedModule("module name", module)
+```
+
+and then, mark in other module, that you need module with some name
+
+```go
+    type Module struct{
+    	NeedNamed interface{} `inject:"module name"`
+    }
+```
